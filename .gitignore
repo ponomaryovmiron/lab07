@@ -2,3 +2,8 @@
 *install*/
 *.swp
 .idea/
+log.txt
+*.o
+*.a
+example1
+example2
