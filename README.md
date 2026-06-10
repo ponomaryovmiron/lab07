@@ -1,115 +1,177 @@
-Можно вставить в отчёт вот так:
+# Мини-отчёт по ЛР4
 
-## Основные созданные CMake-файлы
+## Цель
 
+Настроить автоматическую сборку проекта через GitHub Actions без TravisCI и AppVeyor.
 
-### Главный `CMakeLists.txt`
+## Что было сделано
 
-```cmake
-cmake_minimum_required(VERSION 3.10)
+За основу был взят проект из `lab03hw`.
+Для новой лабораторной работы был создан репозиторий `lab04`.
 
-project(lab03hw)
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_subdirectory(formatter_lib)
-add_subdirectory(formatter_ex_lib)
-add_subdirectory(solver_lib)
-add_subdirectory(hello_world_application)
-add_subdirectory(solver_application)
-
-install(TARGETS formatter formatter_ex solver hello_world equation
-    RUNTIME DESTINATION bin
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-)
+```bash
+git clone https://github.com/ponomaryovmiron/lab03hw.git lab04
+cd lab04
+git remote remove origin
+git remote add origin https://github.com/ponomaryovmiron/lab04.git
+git branch -M main
 ```
 
-Этот файл является главным для всего проекта.
-В нём подключаются все подпроекты: библиотеки `formatter`, `formatter_ex`, `solver`, а также приложения `hello_world` и `equation`.
+Эти команды склонировали прошлую лабораторную работу и подключили новый репозиторий.
 
-### `formatter_lib/CMakeLists.txt`
+## GitHub Actions
 
-```cmake
-add_library(formatter STATIC
-    formatter.cpp
-)
+Для автоматической сборки был создан файл:
 
-target_include_directories(formatter PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+```text
+.github/workflows/ci.yml
 ```
 
-Этот файл собирает статическую библиотеку `formatter` из файла `formatter.cpp`.
-Также здесь указывается путь к заголовочным файлам библиотеки.
+Файл `ci.yml` запускает сборку при `push`, `pull_request` и вручную через `workflow_dispatch`.
 
-### `formatter_ex_lib/CMakeLists.txt`
+```yaml
+name: CI
 
-```cmake
-add_library(formatter_ex STATIC
-    formatter_ex.cpp
-)
-
-target_include_directories(formatter_ex PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(formatter_ex PUBLIC
-    formatter
-)
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 ```
 
-Этот файл собирает библиотеку `formatter_ex`.
-Она использует библиотеку `formatter`, поэтому подключается через `target_link_libraries`.
+## Сборка на Linux
 
-### `solver_lib/CMakeLists.txt`
+Для Linux настроены две сборки:
 
-```cmake
-add_library(solver STATIC
-    solver.cpp
-)
-
-target_include_directories(solver PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+```text
+Linux gcc
+Linux clang
 ```
 
-Этот файл собирает статическую библиотеку `solver`, в которой находится функция решения квадратного уравнения.
+В workflow используется matrix:
 
-### `hello_world_application/CMakeLists.txt`
-
-```cmake
-add_executable(hello_world
-    hello_world.cpp
-)
-
-target_link_libraries(hello_world
-    formatter_ex
-)
+```yaml
+matrix:
+  include:
+    - compiler: gcc
+      cc: gcc
+      cxx: g++
+    - compiler: clang
+      cc: clang
+      cxx: clang++
 ```
 
-Этот файл создаёт исполняемый файл `hello_world`.
-Программа использует библиотеку `formatter_ex` для красивого вывода текста.
+Сначала устанавливаются нужные инструменты:
 
-### `solver_application/CMakeLists.txt`
-
-```cmake
-add_executable(equation
-    equation.cpp
-)
-
-target_link_libraries(equation
-    solver
-    formatter_ex
-)
+```yaml
+- name: Install tools
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y cmake gcc g++ clang
 ```
 
-Этот файл создаёт приложение `equation`.
-Оно использует библиотеку `solver` для вычислений и `formatter_ex` для вывода результата.
+Затем проект конфигурируется и собирается:
+
+```yaml
+- name: Configure
+  run: |
+    rm -rf _build
+    cmake -S . -B _build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+      -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+- name: Build
+  run: |
+    cmake --build _build --config Release
+```
+
+После сборки запускаются программы:
+
+```yaml
+- name: Run hello_world
+  run: |
+    ./_build/hello_world_application/hello_world
+
+- name: Run equation
+  run: |
+    echo "1 2 1" | ./_build/solver_application/equation
+```
+
+## Сборка на Windows
+
+Для Windows также настроены две сборки:
+
+```text
+Windows gcc
+Windows clang
+```
+
+Для этого используется MSYS2:
+
+```yaml
+- name: Setup MSYS2
+  uses: msys2/setup-msys2@v2
+  with:
+    msystem: UCRT64
+    update: true
+```
+
+Для `gcc` устанавливается пакет:
+
+```text
+mingw-w64-ucrt-x86_64-gcc
+```
+
+Для `clang` устанавливается пакет:
+
+```text
+mingw-w64-ucrt-x86_64-clang
+```
+
+Сборка выполняется через CMake и Ninja:
+
+```yaml
+- name: Configure
+  run: |
+    rm -rf _build
+    cmake -S . -B _build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+      -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+- name: Build
+  run: |
+    cmake --build _build --config Release
+```
+
+После сборки запускаются `.exe` файлы:
+
+```yaml
+- name: Run hello_world
+  run: |
+    ./_build/hello_world_application/hello_world.exe
+
+- name: Run equation
+  run: |
+    echo "1 2 1" | ./_build/solver_application/equation.exe
+```
 
 ## Итог
 
+В результате GitHub Actions выполняет 4 проверки:
+
+```text
+Linux gcc
+Linux clang
+Windows gcc
+Windows clang
+```
+
+Cборка:
 <pre>
 [ 10%] Building CXX object formatter_lib/CMakeFiles/formatter.dir/formatter.cpp.o
 [ 20%] Linking CXX static library libformatter.a
@@ -127,33 +189,3 @@ target_link_libraries(equation
 [100%] Linking CXX executable equation
 [100%] Built target equation
 </pre>
-
-
-----------------
-hello, world
-----------------
-
-
-----------------
-x1 = -1.000000
-----------------
-----------------
-x2 = -1.000000
-----------------
-
-
-<pre>
-[ 20%] Built target formatter
-[ 40%] Built target formatter_ex
-[ 60%] Built target solver
-[ 80%] Built target hello_world
-[100%] Built target equation
-Install the project...
--- Install configuration: ""
--- Installing: /home/vboxuser/Рабочий стол/project/projects/ponomaryovmiron_labs/lab03hw/_install/lib/libformatter.a
--- Installing: /home/vboxuser/Рабочий стол/project/projects/ponomaryovmiron_labs/lab03hw/_install/lib/libformatter_ex.a
--- Installing: /home/vboxuser/Рабочий стол/project/projects/ponomaryovmiron_labs/lab03hw/_install/lib/libsolver.a
--- Installing: /home/vboxuser/Рабочий стол/project/projects/ponomaryovmiron_labs/lab03hw/_install/bin/hello_world
--- Installing: /home/vboxuser/Рабочий стол/project/projects/ponomaryovmiron_labs/lab03hw/_install/bin/equation
-</pre>
-
