@@ -1,9 +1,8 @@
-*build*/
-*install*/
-*.swp
-.idea/
-log.txt
+_build/
+_install/
 *.o
 *.a
-example1
-example2
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
