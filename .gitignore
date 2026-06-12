@@ -1,5 +1,7 @@
+build/
 _build/
 _install/
+artifacts/
 *.o
 *.a
 *.exe
@@ -7,4 +9,3 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-log.txt
